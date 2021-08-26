@@ -2,7 +2,6 @@ const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
 const PORT = process.env.PORT || 3001;
-const baseURL = "http://localhost:3001"
 const app = express();
 let contacts = [
   { 
@@ -27,14 +26,16 @@ let contacts = [
   }
 ];
 
+app.use(express.static("build"));
 app.use(cors());
 app.use(express.json());
 app.use(morgan("dev"));
 
 
-app.get("/", (_, res) => {
-  res.redirect(`${baseURL}/api/contacts`);
-})
+
+app.get("/", (req, res) => {
+  res.send("<h1>Hello World</h1>");
+});
 
 app.get("/api/contacts", (_, res) => {
   res.json(contacts);
@@ -79,6 +80,10 @@ app.get("/info", (req, res) => {
     <div><p>Your phonebook has ${contacts.length} contacts.<p></div>
     <div>(${new Date().toDateString()})</div>`
   res.send(html);
+});
+
+app.use((req, res) => {
+  res.status(404).send({error: "unknown endpoint"})
 });
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
