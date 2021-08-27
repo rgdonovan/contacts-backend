@@ -1,27 +1,33 @@
+require("dotenv").config();
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
-const PORT = process.env.PORT || 3001;
+const mongoose = require("mongoose");
+const Contact = require("./models/contact");
+const mongoURL = process.env.MONGODB_URI;
+const PORT = process.env.PORT;
 const app = express();
+mongoose.connect(mongoURL, { useNewUrlParser: true });
+
 let contacts = [
-  { 
+  {
     "id": 1,
-    "name": "Arto Hellas", 
+    "name": "Arto Hellas",
     "number": "040-123456"
   },
-  { 
+  {
     "id": 2,
-    "name": "Ada Lovelace", 
+    "name": "Ada Lovelace",
     "number": "39-44-5323523"
   },
-  { 
+  {
     "id": 3,
-    "name": "Dan Abramov", 
+    "name": "Dan Abramov",
     "number": "12-43-234345"
   },
-  { 
+  {
     "id": 4,
-    "name": "Mary Poppendieck", 
+    "name": "Mary Poppendieck",
     "number": "39-23-6423122"
   }
 ];
@@ -38,42 +44,50 @@ app.get("/", (req, res) => {
 });
 
 app.get("/api/contacts", (_, res) => {
-  res.json(contacts);
+  Contact.find({})
+    .then(contacts => res.json(contacts))
+    .catch(error => next(error));
 });
 
 app.get("/api/contacts/:id", (req, res) => {
-  const id = +req.params.id;
-  const contact = contacts.find(c => c.id === id);
-  contact ? res.json(contact) : res.status(404).end();
+  Contact
+    .findById(req.params.id)
+    .then(contact => {
+      return contact ? res.json(contact) : res.status(404).end();
+    })
+    .catch(error => next(error));
 });
 
-app.delete("/api/contacts/:id", (req ,res) => {
-  const id = +req.params.id;
-  contacts = contacts.filter(c => c.id !== id);
-  res.status(204).end();
+app.delete("/api/contacts/:id", (req, res) => {
+  Contact.findByIdAndDelete(req.params.id)
+    .then(_ => res.status(204).end())
+    .catch(error => next(error));
 });
 
-app.post("/api/contacts", (req, res) => {
-  let contact = req.body;
-  if (!contact.name || !contact.number || contacts.find(c => c.name === contact.name)) {
-    return res.status(400)
-              .json({error: "invalid content"});    
-  }
+app.post("/api/contacts", (req, res, next) => {
+  const body = req.body;
 
-  contact.id = Math.round(Math.random() * 10000);
-  contacts.push(contact);
-  res.json(contact);
+  const contact = new Contact({
+    name: body.name,
+    number: body.number
+  });
+
+  contact.save()
+    .then(savedContact => savedContact.toJSON())
+    .then(savedAndFormattedNote => res.json(savedAndFormattedNote))
+    .catch(error => next(error));
 });
 
 app.put("/api/contacts/:id", (req, res) => {
-  const id = +req.params.id;
-  let contact = contacts.find(c => c.id === id);
-  
-  if (!contact) return res.status(404).json({error: "contact not found"})
-  
-  Object.assign(contact, req.body);
-  res.json(contact);
-})
+  const body = req.body;
+  const id = req.params.id;
+
+  const contact = { name: body.name, number: body.number };
+
+  Contact.findByIdAndUpdate(id, contact, { new: true })
+    .then(updatedContact => res.json(updatedContact))
+    .catch(error => next(error));
+});
 
 app.get("/info", (req, res) => {
   const html = `
@@ -83,7 +97,19 @@ app.get("/info", (req, res) => {
 });
 
 app.use((req, res) => {
-  res.status(404).send({error: "unknown endpoint"})
+  res.status(404).send({ error: "unknown endpoint" })
+});
+
+app.use((error, req, res, next) => {
+  console.log(error.message);
+
+  if (error.name === "CastError") {
+    return res.status(400).send({ error: "malformatted id" });
+  } else if (error.name === "ValidationError") {
+    return res.status(400).json({ error: error.message });
+  }
+
+  next(error);
 });
 
 app.listen(PORT, () => console.log(`Listening on port ${PORT}`));
